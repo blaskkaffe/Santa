@@ -43,6 +43,8 @@ export interface WorldRow {
   z: number; // local z within chunk (negative, far side)
   obstacles: RowObstacle[];
   chimney: RowChimney | null;
+  /** An open plaza row: no buildings, a perpendicular street crosses the lanes here. */
+  isCrossStreet: boolean;
 }
 
 export interface Collidable {

@@ -271,6 +271,16 @@ export function createHouse(opts: HouseOptions): THREE.Group {
   door.position.set(0, 0.65, d / 2 + 0.06);
   g.add(door);
 
+  if (rng() < 0.3) {
+    const wreath = mesh(new THREE.TorusGeometry(0.22, 0.06, 6, 12), 0x2f6b3f, { roughness: 0.8 });
+    wreath.position.set(0, 1.5, d / 2 + 0.07);
+    g.add(wreath);
+    const bow = mesh(new THREE.TorusGeometry(0.07, 0.025, 5, 8), 0xd6403a, { roughness: 0.4 });
+    bow.rotation.x = Math.PI / 2;
+    bow.position.set(0, 1.28, d / 2 + 0.08);
+    g.add(bow);
+  }
+
   // Windows (lit at night = emissive); count and shape vary per house.
   const winMat = mat(theme.palette.windowLit, { emissive: theme.palette.windowLit, emissiveIntensity: 0.9, roughness: 0.4 });
   const windowCount = style === 'terrace' ? 2 : 1 + Math.floor(rng() * 3);
@@ -430,6 +440,46 @@ export function createTree(kind: TreeKind, theme: Theme, seed = Math.random()): 
   if (kind === 'oak') return createOakTree(theme, seed);
   if (kind === 'elm') return createElmTree(theme, seed);
   return createPineTree(theme, seed);
+}
+
+const ORNAMENT_COLORS = [0xd6403a, 0xf2b73c, 0x2f5fa8, 0xf2f2f2, 0x9c3ba8];
+const LIGHT_COLORS = [0xffe14d, 0x4dff88, 0xff6b6b, 0x4db4ff];
+
+/** A big ornament- and light-covered centerpiece tree for town plazas. */
+export function createDecoratedTree(theme: Theme): THREE.Group {
+  const g = new THREE.Group();
+  const base = createPineTree(theme, Math.random() * 10);
+  base.scale.setScalar(2.3);
+  g.add(base);
+
+  const treeTop = 8.4; // roughly matches the scaled pine's apex
+  const ornamentCount = 12;
+  for (let i = 0; i < ornamentCount; i++) {
+    const t = i / ornamentCount;
+    const angle = t * Math.PI * 2 * 2.4;
+    const radius = (1 - t) * 1.7 + 0.25;
+    const color = ORNAMENT_COLORS[i % ORNAMENT_COLORS.length];
+    const ball = mesh(new THREE.SphereGeometry(0.15, 8, 8), color, { metalness: 0.35, roughness: 0.25 });
+    ball.position.set(Math.cos(angle) * radius, 1.0 + t * (treeTop - 1.6), Math.sin(angle) * radius);
+    g.add(ball);
+  }
+
+  const lightCount = 18;
+  for (let i = 0; i < lightCount; i++) {
+    const t = i / lightCount;
+    const angle = t * Math.PI * 2 * 3.2;
+    const radius = (1 - t) * 1.85 + 0.15;
+    const color = LIGHT_COLORS[i % LIGHT_COLORS.length];
+    const bulb = mesh(new THREE.SphereGeometry(0.065, 6, 6), color, { emissive: color, emissiveIntensity: 1.5 });
+    bulb.position.set(Math.cos(angle) * radius, 0.5 + t * (treeTop - 1.1), Math.sin(angle) * radius);
+    g.add(bulb);
+  }
+
+  const star = mesh(new THREE.OctahedronGeometry(0.36, 0), 0xffe14d, { emissive: 0xffe14d, emissiveIntensity: 0.9, metalness: 0.4, roughness: 0.2 });
+  star.position.y = treeTop;
+  g.add(star);
+
+  return g;
 }
 
 // --- Ground-level obstacles --------------------------------------------

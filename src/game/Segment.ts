@@ -1,4 +1,4 @@
-import { Height } from './constants';
+import { Height, CROSS_STREET_EVERY } from './constants';
 import type { RowObstacle, WorldRow } from './types';
 
 const HEIGHT_WEIGHTS: [Height, number][] = [
@@ -28,7 +28,11 @@ function kindForHeight(h: Height): RowObstacle['kind'] {
  * index and a 0..1 difficulty ramp. Pure data — no THREE objects here.
  */
 export function generateRow(laneCount: number, globalRowIndex: number, difficulty: number): WorldRow {
-  const row: WorldRow = { z: 0, obstacles: [], chimney: null };
+  const isCrossStreet = globalRowIndex > 0 && globalRowIndex % CROSS_STREET_EVERY === 0;
+  const row: WorldRow = { z: 0, obstacles: [], chimney: null, isCrossStreet };
+
+  // Open plaza: no buildings or hazards, just a crossing street to breathe in.
+  if (isCrossStreet) return row;
 
   // Safe tutorial buffer at the very start of a run.
   if (globalRowIndex < 3) {

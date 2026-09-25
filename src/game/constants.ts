@@ -28,6 +28,12 @@ export const CHUNKS_AHEAD = 4;
 /** How far behind the player a chunk may fall before being recycled. */
 export const DESPAWN_MARGIN = ROW_LENGTH * 3;
 
+/** Every Nth row is left open as a cross street / plaza instead of built up. */
+export const CROSS_STREET_EVERY = 4;
+export const CROSS_STREET_DEPTH = 7;
+/** Chance an otherwise-buildable lane is left as an open lot for breathing room. */
+export const EMPTY_LOT_CHANCE = 0.14;
+
 export const BASE_SPEED = 13; // units / second
 export const MAX_SPEED = 30;
 export const SPEED_RAMP_PER_METER = 0.012; // speed gained per meter traveled

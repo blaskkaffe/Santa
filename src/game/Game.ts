@@ -44,8 +44,9 @@ export class Game {
   private hemiLight: THREE.HemisphereLight;
   private sunLight: THREE.DirectionalLight;
   private skyGroup: THREE.Group;
-  private moon: THREE.Mesh;
+  private moon: THREE.Group;
   private stars: THREE.Points;
+  private starsBright: THREE.Points;
 
   private state: GameState = 'menu';
   private theme: Theme;
@@ -92,8 +93,10 @@ export class Game {
     this.scene.add(this.skyGroup);
     this.moon = this.buildMoon();
     this.skyGroup.add(this.moon);
-    this.stars = this.buildStars();
+    this.stars = this.buildStars(600, 1.1, 0xffffff);
     this.skyGroup.add(this.stars);
+    this.starsBright = this.buildStars(70, 2.6, 0xfff6e0);
+    this.skyGroup.add(this.starsBright);
 
     this.world = new World(this.scene, this.theme);
     this.player = new Player(this.theme.laneCount);
@@ -119,16 +122,47 @@ export class Game {
     requestAnimationFrame(this.loop);
   }
 
-  private buildMoon(): THREE.Mesh {
-    const geo = new THREE.SphereGeometry(6, 16, 16);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xf4f1e4 });
-    const moon = new THREE.Mesh(geo, mat);
-    moon.position.set(40, 45, -120);
-    return moon;
+  private buildGlowTexture(): THREE.Texture {
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    return new THREE.CanvasTexture(canvas);
   }
 
-  private buildStars(): THREE.Points {
-    const count = 500;
+  /** Moon color stays fixed and bright regardless of theme — it should always pop
+   * against the night sky rather than blend into it like the ambient light tint. */
+  private buildMoon(): THREE.Group {
+    const g = new THREE.Group();
+
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: this.buildGlowTexture(),
+        color: 0xfff3d0,
+        transparent: true,
+        opacity: 0.55,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    glow.scale.set(38, 38, 1);
+    g.add(glow);
+
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(7, 20, 20), new THREE.MeshBasicMaterial({ color: 0xfef6e0 }));
+    g.add(moon);
+
+    g.position.set(42, 50, -135);
+    return g;
+  }
+
+  private buildStars(count: number, size: number, color: number): THREE.Points {
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const radius = 140 + Math.random() * 80;
@@ -140,7 +174,7 @@ export class Game {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.1, sizeAttenuation: true });
+    const mat = new THREE.PointsMaterial({ color, size, sizeAttenuation: true, transparent: true, opacity: 0.95 });
     return new THREE.Points(geo, mat);
   }
 
@@ -168,7 +202,6 @@ export class Game {
     this.hemiLight.color.setHex(theme.palette.moonlight);
     this.hemiLight.groundColor.setHex(theme.palette.ground);
     this.sunLight.color.setHex(theme.palette.moonlight);
-    (this.moon.material as THREE.MeshBasicMaterial).color.setHex(theme.palette.moonlight);
   }
 
   private goToMenu() {

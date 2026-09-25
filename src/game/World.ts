@@ -10,6 +10,8 @@ import {
   HEIGHT_Y,
   CHIMNEY_DELIVERY_RADIUS,
   LANE_WIDTH,
+  CROSS_STREET_DEPTH,
+  EMPTY_LOT_CHANCE,
   laneX,
 } from './constants';
 import { generateRow } from './Segment';
@@ -29,6 +31,7 @@ import {
   createCandyCanePole,
   createGiantOrnament,
   createPeppermint,
+  createDecoratedTree,
 } from './props';
 
 interface Animator {
@@ -59,6 +62,7 @@ export class World {
   private difficulty = 0;
   private ground?: THREE.Mesh;
   private roadStripes: THREE.Mesh[] = [];
+  private crossStreetMat?: THREE.MeshStandardMaterial;
   collidables: Collidable[] = [];
 
   constructor(scene: THREE.Scene, theme: Theme) {
@@ -158,6 +162,38 @@ export class World {
     return tex;
   }
 
+  private buildCrossStreetTexture(width: number): THREE.Texture {
+    const pxPerUnit = 18;
+    const w = Math.max(8, Math.round(width * pxPerUnit));
+    const h = Math.max(8, Math.round(CROSS_STREET_DEPTH * pxPerUnit));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    const base = new THREE.Color(this.theme.palette.road);
+    ctx.fillStyle = base.getStyle();
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 220; i++) {
+      const shade = Math.random() < 0.5 ? 1.12 : 0.88;
+      const c = base.clone().multiplyScalar(shade);
+      ctx.fillStyle = `rgba(${Math.round(c.r * 255)}, ${Math.round(c.g * 255)}, ${Math.round(c.b * 255)}, 0.4)`;
+      ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+    // dashed centerline running the long way (perpendicular to the main road)
+    ctx.fillStyle = 'rgba(255, 230, 160, 0.9)';
+    const dashLen = w * 0.028;
+    const gap = w * 0.02;
+    for (let x = 0; x < w; x += dashLen + gap) {
+      ctx.fillRect(x, h / 2 - h * 0.012, dashLen, Math.max(1, h * 0.024));
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(0, h * 0.03, w, Math.max(1, h * 0.02));
+    ctx.fillRect(0, h * 0.97 - h * 0.02, w, Math.max(1, h * 0.02));
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
   private buildGround() {
     if (this.ground) {
       this.scene.remove(this.ground);
@@ -168,6 +204,9 @@ export class World {
       s.geometry.dispose();
     }
     this.roadStripes = [];
+
+    const crossWidth = this.laneCount * LANE_WIDTH + 44;
+    this.crossStreetMat = new THREE.MeshStandardMaterial({ map: this.buildCrossStreetTexture(crossWidth), roughness: 0.95, flatShading: true });
 
     const width = this.laneCount * LANE_WIDTH + 44;
     const geo = new THREE.PlaneGeometry(width, GROUND_LENGTH);
@@ -284,7 +323,26 @@ export class World {
     }
   }
 
+  /** An open plaza: a perpendicular street crosses every lane, centered on a decorated tree. */
+  private buildCrossStreetRow(group: THREE.Group, z: number) {
+    const width = this.laneCount * LANE_WIDTH + 44;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(width, CROSS_STREET_DEPTH), this.crossStreetMat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(0, 0.025, z);
+    plane.receiveShadow = true;
+    group.add(plane);
+
+    const tree = createDecoratedTree(this.theme);
+    tree.position.set(0, 0, z);
+    group.add(tree);
+  }
+
   private buildRow(group: THREE.Group, chunk: Chunk, row: ReturnType<typeof generateRow>, z: number, rowIndex: number) {
+    if (row.isCrossStreet) {
+      this.buildCrossStreetRow(group, z);
+      return;
+    }
+
     const highBuildingLanes = new Set(
       row.obstacles.filter((o) => o.height === Height.HIGH).map((o) => o.lane),
     );
@@ -293,10 +351,13 @@ export class World {
 
     // Decorative houses flank each lane like real street frontage — offset to
     // either side so the flight corridor down the lane centerline stays clear
-    // at every height. Skipped where a tall hazard building already stands.
+    // at every height. Skipped where a tall hazard building already stands,
+    // or (for variety/breathing room) randomly left as an open lot.
     for (let lane = 0; lane < this.laneCount; lane++) {
       const laneCenter = laneX(lane, this.laneCount);
       if (highBuildingLanes.has(lane)) continue;
+      const hasChimneyHere = row.chimney?.lane === lane;
+      if (!hasChimneyHere && Math.random() < EMPTY_LOT_CHANCE) continue;
 
       let chimneyHouse: THREE.Group | null = null;
       let chimneyHouseX = laneCenter;
