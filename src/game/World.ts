@@ -43,6 +43,8 @@ interface Chunk {
 }
 
 const GROUND_LENGTH = 20000;
+/** Distance each flanking house is offset from its lane's centerline, keeping the flight corridor clear. */
+const HOUSE_OFFSET = 2.05;
 
 export class World {
   readonly scene: THREE.Scene;
@@ -286,32 +288,51 @@ export class World {
 
     this.buildStreetscape(group, z, rowIndex);
 
-    // Decorative houses (also carry chimneys for delivery rows) for every
-    // lane not already occupied by a tall hazard building.
+    // Decorative houses flank each lane like real street frontage — offset to
+    // either side so the flight corridor down the lane centerline stays clear
+    // at every height. Skipped where a tall hazard building already stands.
     for (let lane = 0; lane < this.laneCount; lane++) {
-      const x = laneX(lane, this.laneCount);
+      const laneCenter = laneX(lane, this.laneCount);
       if (highBuildingLanes.has(lane)) continue;
 
-      const seed = Math.abs(Math.sin(lane * 91.7 + z * 3.1)) * 1000;
-      const house = createHouse({ theme: this.theme, seed, style: this.theme.houseStyle });
-      house.position.set(x, 0, z + (seed % 4) - 2);
-      house.rotation.y = 0;
-      group.add(house);
+      let chimneyHouse: THREE.Group | null = null;
+      let chimneyHouseX = laneCenter;
+      let chimneyHouseZ = z;
+
+      for (const side of [-1, 1] as const) {
+        const x = laneCenter + side * HOUSE_OFFSET;
+        const seed = Math.abs(Math.sin(lane * 91.7 + side * 33.3 + z * 3.1)) * 1000;
+        const house = createHouse({
+          theme: this.theme,
+          seed,
+          width: 1.6 + (seed % 3) * 0.22,
+          style: this.theme.houseStyle,
+        });
+        const houseZ = z + (seed % 4) - 2;
+        house.position.set(x, 0, houseZ);
+        group.add(house);
+
+        if (row.chimney && row.chimney.lane === lane && side === -1) {
+          chimneyHouse = house;
+          chimneyHouseX = x;
+          chimneyHouseZ = houseZ;
+        }
+      }
 
       if (row.chimney && row.chimney.lane === lane) {
-        const roofTopY = (house.userData.roofTopY as number) ?? 3.5;
+        const roofTopY = (chimneyHouse?.userData.roofTopY as number) ?? 3.2;
         const chimney = createChimney(this.theme);
-        chimney.position.set(x - 0.6, roofTopY, house.position.z + 0.4);
+        chimney.position.set(chimneyHouseX + HOUSE_OFFSET * 0.3, roofTopY, chimneyHouseZ + 0.4);
         group.add(chimney);
 
         const smoke = createSmokePuff();
-        smoke.position.set(x - 0.6, roofTopY + 0.9, house.position.z + 0.4);
+        smoke.position.set(chimneyHouseX + HOUSE_OFFSET * 0.3, roofTopY + 0.9, chimneyHouseZ + 0.4);
         smoke.scale.setScalar(0.6);
         group.add(smoke);
         chunk.animators.push({ obj: smoke, kind: 'bob', seed: Math.random() * 10 });
 
         const gift = createGift();
-        gift.position.set(x, HEIGHT_Y[Height.MID], z);
+        gift.position.set(laneCenter, HEIGHT_Y[Height.MID], z);
         gift.scale.setScalar(0.9);
         group.add(gift);
         chunk.animators.push({ obj: gift, kind: 'bob', seed: Math.random() * 10 });
@@ -350,6 +371,10 @@ export class World {
           radius: 2.1,
           hit: false,
           object: tall,
+          // A tall building/landmark is a full ground-to-sky structure — it
+          // blocks the whole lane, not just the HIGH band, so avoiding it
+          // means changing lanes rather than ducking under it.
+          blocksAllHeights: true,
         });
       } else if (obstacle.height === Height.MID) {
         if (obstacle.kind === 'smoke') {
@@ -361,8 +386,8 @@ export class World {
           chunk.collidables.push({ kind: 'smoke', lane: obstacle.lane, height: Height.MID, z, radius: 1.6, hit: false, object: puff });
         } else {
           const tree = createTree('pine', this.theme, Math.random() * 10);
-          tree.position.set(x, HEIGHT_Y[Height.LOW] - 1.4, z);
-          tree.scale.setScalar(1.9);
+          tree.position.set(x, 0, z);
+          tree.scale.setScalar(1.25);
           group.add(tree);
           chunk.collidables.push({ kind: 'tree', lane: obstacle.lane, height: Height.MID, z, radius: 1.5, hit: false, object: tree });
         }

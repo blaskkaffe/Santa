@@ -252,7 +252,8 @@ export class Game {
       if (c.hit) continue;
       const dz = Math.abs(c.z - playerZ);
       if (dz > COLLISION_Z_PRECHECK) continue;
-      if (c.lane !== this.player.lane || c.height !== this.player.currentHeight) continue;
+      if (c.lane !== this.player.lane) continue;
+      if (!c.blocksAllHeights && c.height !== this.player.currentHeight) continue;
 
       if (c.kind === 'chimney') {
         if (dz < CHIMNEY_DELIVERY_RADIUS) this.activeChimney = c;

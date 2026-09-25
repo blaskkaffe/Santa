@@ -1,6 +1,6 @@
 // Grid + world tuning constants shared across the game.
 
-export const LANE_WIDTH = 5.4;
+export const LANE_WIDTH = 6.4;
 
 /** The three flight bands Santa can occupy. */
 export const Height = {

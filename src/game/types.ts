@@ -54,4 +54,6 @@ export interface Collidable {
   hit: boolean; // obstacle already resolved (hit or delivered) this pass
   object: THREE.Object3D;
   giftMarker?: THREE.Object3D;
+  /** Full ground-to-sky structures block every flight height in their lane, not just their tagged one. */
+  blocksAllHeights?: boolean;
 }
