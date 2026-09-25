@@ -108,12 +108,18 @@ export function createHouse(opts: HouseOptions): THREE.Group {
     g.add(win);
   }
 
-  // Snow cap on roof ridge
-  if (theme.palette.snow) {
-    const snowCap = mesh(new THREE.ConeGeometry(Math.hypot(w, d) * 0.64, roofH * 0.35, 4), theme.palette.snow, { roughness: 1 });
+  // Snow dusting near the roof ridge. To sit flush on the sloped roof (rather
+  // than floating above it) the cap must share the main roof cone's apex and
+  // taper — so it's built at the same radius:height ratio, just shorter, with
+  // a small radius bump for a light overhang.
+  if (theme.palette.snow && style !== 'canal') {
+    const roofBaseR = Math.hypot(w, d) * 0.62;
+    const snowFrac = 0.4;
+    const snowH = roofH * snowFrac;
+    const snowR = roofBaseR * snowFrac * 1.08;
+    const snowCap = mesh(new THREE.ConeGeometry(snowR, snowH, 4), theme.palette.snow, { roughness: 1 });
     snowCap.rotation.y = Math.PI / 4;
-    snowCap.position.y = h + roofH - roofH * 0.1;
-    snowCap.scale.set(1, 1, 1);
+    snowCap.position.y = h + roofH - snowH / 2; // apex flush with the main roof's apex
     g.add(snowCap);
   }
 
