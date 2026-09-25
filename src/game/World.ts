@@ -26,6 +26,9 @@ import {
   createGift,
   createTallBuilding,
   createLandmark,
+  createCandyCanePole,
+  createGiantOrnament,
+  createPeppermint,
 } from './props';
 
 interface Animator {
@@ -305,7 +308,7 @@ export class World {
         const house = createHouse({
           theme: this.theme,
           seed,
-          width: 1.6 + (seed % 3) * 0.22,
+          maxWidth: 2.0,
           style: this.theme.houseStyle,
         });
         const houseZ = z + (seed % 4) - 2;
@@ -355,25 +358,36 @@ export class World {
       const x = laneX(obstacle.lane, this.laneCount);
 
       if (obstacle.height === Height.HIGH) {
-        const useLandmark = Math.random() < 0.16;
-        const tall = useLandmark ? createLandmark(this.theme.landmark, this.theme) : createTallBuilding(this.theme, Math.random() * 100);
-        tall.position.set(x, 0, z);
-        group.add(tall);
-        if (useLandmark) {
+        const roll = Math.random();
+        let tall: THREE.Group;
+        let radius = 2.1;
+        if (roll < 0.12) {
+          tall = createLandmark(this.theme.landmark, this.theme);
           const hub = tall.userData.hub as THREE.Group | undefined;
           if (hub) chunk.animators.push({ obj: hub, kind: 'spin', seed: 0 });
+        } else if (roll < 0.3) {
+          tall = createCandyCanePole(8.5 + Math.random() * 2);
+          radius = 1.1;
+        } else if (roll < 0.46) {
+          const ornamentColors = [0xd6403a, 0x2a6b3f, 0x2f5fa8, 0xd4af37];
+          tall = createGiantOrnament(ornamentColors[Math.floor(Math.random() * ornamentColors.length)]);
+          radius = 1.9;
+        } else {
+          tall = createTallBuilding(this.theme, Math.random() * 100);
         }
+        tall.position.set(x, 0, z);
+        group.add(tall);
         chunk.collidables.push({
           kind: 'building',
           lane: obstacle.lane,
           height: Height.HIGH,
           z,
-          radius: 2.1,
+          radius,
           hit: false,
           object: tall,
-          // A tall building/landmark is a full ground-to-sky structure — it
-          // blocks the whole lane, not just the HIGH band, so avoiding it
-          // means changing lanes rather than ducking under it.
+          // These are full ground-to-sky structures — they block the whole
+          // lane, not just the HIGH band, so avoiding them means changing
+          // lanes rather than ducking under them.
           blocksAllHeights: true,
         });
       } else if (obstacle.height === Height.MID) {
@@ -395,10 +409,11 @@ export class World {
         // LOW: street-level clutter, pick a random flavor.
         const roll = Math.random();
         let prop: THREE.Group;
-        if (roll < 0.35) prop = createCar(Math.random() < 0.5 ? 0xb52a2a : 0x2a4bb5);
-        else if (roll < 0.6) prop = createLampPost();
-        else if (roll < 0.8) prop = createSnowman();
-        else prop = createFence(3.4);
+        if (roll < 0.3) prop = createCar(Math.random() < 0.5 ? 0xb52a2a : 0x2a4bb5);
+        else if (roll < 0.5) prop = createLampPost();
+        else if (roll < 0.68) prop = createSnowman();
+        else if (roll < 0.84) prop = createFence(3.4);
+        else prop = createPeppermint();
         prop.position.set(x, 0, z);
         group.add(prop);
         chunk.collidables.push({ kind: 'building', lane: obstacle.lane, height: Height.LOW, z, radius: 1.3, hit: false, object: prop });

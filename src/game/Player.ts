@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createSleigh } from './props';
+import { createSleigh, createSpeedTrail } from './props';
 import {
   HEIGHT_Y,
   HEIGHT_ORDER,
@@ -13,6 +13,7 @@ import {
 export class Player {
   readonly group: THREE.Group;
   private readonly sleighTilt: THREE.Group;
+  private readonly trail: THREE.Group;
   lane: number;
   heightIndex: number; // index into HEIGHT_ORDER
   private targetX: number;
@@ -28,6 +29,8 @@ export class Player {
     const { group, hub } = createSleigh();
     this.group = group;
     this.sleighTilt = hub;
+    this.trail = createSpeedTrail();
+    this.sleighTilt.add(this.trail);
     this.targetX = laneX(this.lane, this.laneCount);
     this.targetY = HEIGHT_Y[HEIGHT_ORDER[this.heightIndex]];
     this.group.position.set(this.targetX, this.targetY, 0);
@@ -53,7 +56,7 @@ export class Player {
     this.targetY = HEIGHT_Y[HEIGHT_ORDER[this.heightIndex]];
   }
 
-  update(dt: number) {
+  update(dt: number, speedFactor = 1) {
     const p = this.group.position;
     const prevX = p.x;
     p.x += (this.targetX - p.x) * Math.min(1, LANE_MOVE_LERP * dt);
@@ -68,6 +71,9 @@ export class Player {
     const targetPitch = THREE.MathUtils.clamp((this.targetY - p.y) * 0.12, -0.35, 0.35);
     this.sleighTilt.rotation.z += (targetRoll - this.sleighTilt.rotation.z) * Math.min(1, 6 * dt);
     this.sleighTilt.rotation.x += (targetPitch - this.sleighTilt.rotation.x) * Math.min(1, 6 * dt);
+
+    const targetTrailScale = THREE.MathUtils.clamp(speedFactor, 0.6, 2.4);
+    this.trail.scale.z += (targetTrailScale - this.trail.scale.z) * Math.min(1, 4 * dt);
 
     if (this.invulnTimer > 0) {
       this.invulnTimer -= dt;
@@ -94,6 +100,7 @@ export class Player {
     this.targetY = HEIGHT_Y[HEIGHT_ORDER[this.heightIndex]];
     this.group.position.set(this.targetX, this.targetY, 0);
     this.sleighTilt.rotation.set(0, 0, 0);
+    this.trail.scale.set(1, 1, 0.6);
     this.invulnTimer = 0;
     this.group.visible = true;
   }

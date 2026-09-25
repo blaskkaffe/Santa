@@ -64,7 +64,7 @@ export class Game {
     this.theme = THEMES[0];
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 400);
+    this.camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerHeight, 0.1, 400);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -278,6 +278,15 @@ export class Game {
     this.camera.position.z += (targetZ - this.camera.position.z) * 0.18;
     this.camera.lookAt(p.x * 0.4, p.y - 0.6, p.z - 18);
 
+    // Arcade rail-shooter FOV kick: the view widens as speed ramps up,
+    // exaggerating the sense of velocity like a classic Space Harrier dive.
+    const speedT = THREE.MathUtils.clamp((this.speed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED), 0, 1);
+    const targetFov = 66 + speedT * 12;
+    if (Math.abs(this.camera.fov - targetFov) > 0.05) {
+      this.camera.fov += (targetFov - this.camera.fov) * 0.08;
+      this.camera.updateProjectionMatrix();
+    }
+
     this.skyGroup.position.set(this.camera.position.x, 0, this.camera.position.z);
   }
 
@@ -309,7 +318,7 @@ export class Game {
     }
 
     this.player.group.position.z = -this.traveled;
-    this.player.update(dt);
+    this.player.update(dt, this.speed / BASE_SPEED);
     this.world.update(dt, this.traveled);
     this.updatePoppingGifts(dt);
 
