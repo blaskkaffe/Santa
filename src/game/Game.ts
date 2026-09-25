@@ -3,6 +3,7 @@ import { World } from './World';
 import { Player } from './Player';
 import { InputController } from './Input';
 import { Hud } from './Hud';
+import { AudioSystem } from './Audio';
 import { THEMES, getTheme } from './themes';
 import type { Theme } from './types';
 import {
@@ -20,10 +21,12 @@ import {
 } from './constants';
 import type { Collidable } from './types';
 
-type GameState = 'menu' | 'playing' | 'gameover';
+type GameState = 'menu' | 'playing' | 'gameover' | 'paused';
 
 const IDLE_SPEED = 5;
 const COLLISION_Z_PRECHECK = 3.5;
+const COMBO_WINDOW_SECONDS = 4;
+const MAX_COMBO_MULTIPLIER_STEPS = 4; // multiplier caps at 1 + 4*0.25 = 2x
 
 interface PoppingGift {
   obj: THREE.Object3D;
@@ -40,6 +43,7 @@ export class Game {
   private player: Player;
   private hud: Hud;
   private input: InputController;
+  private audio = new AudioSystem();
 
   private hemiLight: THREE.HemisphereLight;
   private sunLight: THREE.DirectionalLight;
@@ -49,6 +53,7 @@ export class Game {
   private starsBright: THREE.Points;
 
   private state: GameState = 'menu';
+  private prePauseState: GameState | null = null;
   private theme: Theme;
   private traveled = 0;
   private speed = IDLE_SPEED;
@@ -57,6 +62,11 @@ export class Game {
   private gifts = 0;
   private activeChimney: Collidable | null = null;
   private poppingGifts: PoppingGift[] = [];
+
+  private combo = 0;
+  private comboTimer = 0;
+  private shakeTimer = 0;
+  private shakeStrength = 0;
 
   private container: HTMLElement;
 
@@ -110,6 +120,7 @@ export class Game {
     this.hud.onStart((themeId) => this.startRun(themeId));
     this.hud.onRetry(() => this.startRun(this.theme.id));
     this.hud.onMenu(() => this.goToMenu());
+    this.hud.onMuteToggle((muted) => this.audio.setMuted(muted));
 
     this.input = new InputController(uiRoot);
     this.input.onAction((action) => this.handleAction(action));
@@ -119,7 +130,33 @@ export class Game {
     this.hud.showStart();
 
     window.addEventListener('resize', this.onResize);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    window.addEventListener('blur', this.onWindowBlur);
+    window.addEventListener('focus', this.onWindowFocus);
     requestAnimationFrame(this.loop);
+  }
+
+  private onVisibilityChange = () => {
+    if (document.hidden) this.pauseForFocusLoss();
+    else this.resumeFromFocusLoss();
+  };
+  private onWindowBlur = () => this.pauseForFocusLoss();
+  private onWindowFocus = () => this.resumeFromFocusLoss();
+
+  private pauseForFocusLoss() {
+    if (this.state !== 'playing') return;
+    this.prePauseState = this.state;
+    this.state = 'paused';
+    this.hud.showPaused();
+  }
+
+  private resumeFromFocusLoss() {
+    if (this.state !== 'paused' || !this.prePauseState) return;
+    this.state = this.prePauseState;
+    this.prePauseState = null;
+    this.hud.hidePaused();
+    // Avoid a huge dt spike from time spent away when the loop next ticks.
+    this.timer.update();
   }
 
   private buildGlowTexture(): THREE.Texture {
@@ -211,6 +248,9 @@ export class Game {
   }
 
   private startRun(themeId: string) {
+    this.audio.unlock();
+    this.audio.startMusic();
+
     const theme = getTheme(themeId);
     this.applyTheme(theme);
     this.world.setTheme(theme);
@@ -222,6 +262,8 @@ export class Game {
     this.gifts = 0;
     this.activeChimney = null;
     this.poppingGifts = [];
+    this.combo = 0;
+    this.comboTimer = 0;
     this.state = 'playing';
     this.hud.showPlaying();
     this.hud.updateHealth(this.health);
@@ -232,6 +274,8 @@ export class Game {
   private gameOver() {
     this.state = 'gameover';
     this.speed = 0;
+    this.audio.stopMusic();
+    this.audio.playGameOver();
     this.hud.showGameOver(this.score, this.gifts);
   }
 
@@ -261,10 +305,20 @@ export class Game {
     const c = this.activeChimney;
     c.hit = true;
     this.gifts += 1;
-    this.score += GIFT_SCORE;
+
+    // Consecutive deliveries within the combo window build a score multiplier;
+    // taking a hit (or letting the window lapse) resets it.
+    this.combo += 1;
+    this.comboTimer = COMBO_WINDOW_SECONDS;
+    const multiplier = 1 + Math.min(this.combo - 1, MAX_COMBO_MULTIPLIER_STEPS) * 0.25;
+    const awarded = Math.round(GIFT_SCORE * multiplier);
+    this.score += awarded;
+
     this.hud.updateGifts(this.gifts);
     this.hud.updateScore(this.score);
-    this.hud.toast(`+${GIFT_SCORE} 🎁`);
+    const comboSuffix = this.combo >= 2 ? ` x${this.combo} COMBO!` : '';
+    this.hud.toast(`+${awarded} 🎁${comboSuffix}`);
+    this.audio.playDeliver(this.combo);
     if (c.giftMarker) this.poppingGifts.push({ obj: c.giftMarker, t: 0 });
     this.activeChimney = null;
   }
@@ -275,6 +329,11 @@ export class Game {
     this.hud.updateHealth(this.health);
     this.hud.flashDamage();
     this.player.invulnTimer = HIT_INVULN_SECONDS;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.shakeTimer = 0.35;
+    this.shakeStrength = 0.5;
+    this.audio.playHit();
     if (this.health <= 0) this.gameOver();
   }
 
@@ -320,6 +379,12 @@ export class Game {
       this.camera.updateProjectionMatrix();
     }
 
+    if (this.shakeTimer > 0) {
+      const s = this.shakeStrength * (this.shakeTimer / 0.35);
+      this.camera.position.x += (Math.random() - 0.5) * s;
+      this.camera.position.y += (Math.random() - 0.5) * s;
+    }
+
     this.skyGroup.position.set(this.camera.position.x, 0, this.camera.position.z);
   }
 
@@ -344,8 +409,14 @@ export class Game {
     if (this.state === 'playing') {
       this.speed = Math.min(MAX_SPEED, BASE_SPEED + this.traveled * SPEED_RAMP_PER_METER);
       this.traveled += this.speed * dt;
-      this.score = this.traveled * DISTANCE_SCORE_PER_METER + this.gifts * GIFT_SCORE;
+      this.score += this.speed * dt * DISTANCE_SCORE_PER_METER;
       this.hud.updateScore(this.score);
+
+      if (this.comboTimer > 0) {
+        this.comboTimer -= dt;
+        if (this.comboTimer <= 0) this.combo = 0;
+      }
+      if (this.shakeTimer > 0) this.shakeTimer -= dt;
     } else if (this.state === 'menu') {
       this.traveled += this.speed * dt;
     }

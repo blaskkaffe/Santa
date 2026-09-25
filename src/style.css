@@ -69,6 +69,23 @@ canvas.game-canvas {
   right: max(16px, env(safe-area-inset-right));
 }
 
+.mute-btn {
+  position: absolute;
+  z-index: 20;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  backdrop-filter: blur(6px);
+  font-size: 18px;
+  color: var(--text);
+  cursor: pointer;
+}
+
 .pill {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);

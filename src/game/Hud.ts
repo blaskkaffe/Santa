@@ -20,16 +20,27 @@ export class Hud {
   private startBtn: HTMLButtonElement;
   private retryBtn: HTMLButtonElement;
   private menuBtn: HTMLButtonElement;
+  private muteBtn: HTMLButtonElement;
+  private pausedEl: HTMLElement;
 
   private startCb: ((themeId: string) => void) | null = null;
   private retryCb: (() => void) | null = null;
   private menuCb: (() => void) | null = null;
+  private muteCb: ((muted: boolean) => void) | null = null;
+  private muted = false;
 
   constructor(root: HTMLElement, themes: Theme[]) {
     this.root = root;
     this.selectedThemeId = themes[0].id;
 
     this.root.innerHTML = `
+      <button class="mute-btn" id="mute-btn" aria-label="Toggle sound">🔊</button>
+      <div class="screen paused-screen" id="paused-screen" hidden>
+        <div class="screen-inner">
+          <h1 class="title">⏸ Paused</h1>
+          <p class="subtitle">Come back whenever you're ready.</p>
+        </div>
+      </div>
       <div class="hud" hidden>
         <div class="hud-top-left">
           <div class="pill gift-pill">
@@ -92,12 +103,19 @@ export class Hud {
     this.startBtn = this.root.querySelector('#start-btn')!;
     this.retryBtn = this.root.querySelector('#retry-btn')!;
     this.menuBtn = this.root.querySelector('#menu-btn')!;
+    this.muteBtn = this.root.querySelector('#mute-btn')!;
+    this.pausedEl = this.root.querySelector('#paused-screen')!;
 
     this.buildLevelGrid(themes);
 
     this.startBtn.addEventListener('click', () => this.startCb?.(this.selectedThemeId));
     this.retryBtn.addEventListener('click', () => this.retryCb?.());
     this.menuBtn.addEventListener('click', () => this.menuCb?.());
+    this.muteBtn.addEventListener('click', () => {
+      this.muted = !this.muted;
+      this.muteBtn.textContent = this.muted ? '🔇' : '🔊';
+      this.muteCb?.(this.muted);
+    });
   }
 
   private buildLevelGrid(themes: Theme[]) {
@@ -130,6 +148,16 @@ export class Hud {
   }
   onMenu(cb: () => void) {
     this.menuCb = cb;
+  }
+  onMuteToggle(cb: (muted: boolean) => void) {
+    this.muteCb = cb;
+  }
+
+  showPaused() {
+    this.pausedEl.hidden = false;
+  }
+  hidePaused() {
+    this.pausedEl.hidden = true;
   }
 
   showStart() {
